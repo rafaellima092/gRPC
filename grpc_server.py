@@ -1,34 +1,51 @@
-import grpc
-from concurrent import futures
-import time
-import chat_pb2
-import chat_pb2_grpc
+import socket
+import threading
 
-# Lista para armazenar mensagens
-MESSAGES = []
+def broadcast(message, clients):
+    for client in clients:
+        try:
+            client.send(message.encode())
+        except Exception as e:
+            print("Error broadcasting message:", e)
 
-class ChatServicer(chat_pb2_grpc.ChatServicer):
-    def SendMessage(self, request, context):
-        global MESSAGES
-        MESSAGES.append({"user_id": request.user_id, "message": request.message})
-        return chat_pb2.MessageResponse(user_id=request.user_id, message="Message received.")
+def handle_client(client_socket, clients):
+    # Receber o apelido do cliente
+    nickname = client_socket.recv(1024).decode()
+    print(f"{nickname} entrou no chat.")
+    
+    while True:
+        try:
+            message = client_socket.recv(1024).decode()
+            if not message:
+                clients.remove(client_socket)
+                client_socket.close()
+                print(f"{nickname} saiu do chat.")
+                break
+            broadcast(f"{nickname}: {message}", clients)  # Aqui estamos enviando o apelido junto com a mensagem
+        except Exception as e:
+            print("Error:", e)
+            break
 
-    def ReceiveMessages(self, request, context):
-        global MESSAGES
-        for message in MESSAGES:
-            yield chat_pb2.MessageResponse(user_id=message["user_id"], message=message["message"])
 
-def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    chat_pb2_grpc.add_ChatServicer_to_server(ChatServicer(), server)
-    server.add_insecure_port('[::]:50051')
-    server.start()
-    print("Server started")
-    try:
-        while True:
-            time.sleep(86400)  # Um dia em segundos
-    except KeyboardInterrupt:
-        server.stop(0)
+def main():
+    host = '127.0.0.1'
+    port = 6969
+    
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((host, port))
+    server.listen(5)
+    
+    print("Server listening on port", port)
 
-if __name__ == '__main__':
-    serve()
+    clients = []
+
+    while True:
+        client_socket, addr = server.accept()
+        clients.append(client_socket)
+        print("Connection from", addr)
+
+        client_handler = threading.Thread(target=handle_client, args=(client_socket, clients))
+        client_handler.start()
+
+if __name__ == "__main__":
+    main()

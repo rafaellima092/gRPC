@@ -1,36 +1,34 @@
-import grpc
-import chat_pb2
-import chat_pb2_grpc
+import socket
 import threading
 
-def send_message(stub, user_id, message):
-    response = stub.SendMessage(chat_pb2.MessageRequest(user_id=user_id, message=message))
-    print("Response:", response.message)
-
-def receive_messages(stub, user_id):
-    responses = stub.ReceiveMessages(chat_pb2.MessageRequest(user_id=user_id))
-    for response in responses:
-        print(f"{response.user_id}: {response.message}")
+def receive_messages(client_socket):
+    while True:
+        try:
+            message = client_socket.recv(1024).decode()
+            if not message:
+                break
+            print(message)
+        except Exception as e:
+            print("Error receiving message:", e)
+            break
 
 def main():
-    channel = grpc.insecure_channel('localhost:50051')
-    stub = chat_pb2_grpc.ChatStub(channel)
-    user_id = input("Enter your user ID: ")
+    host = '127.0.0.1'
+    port = 6969
 
-    # Iniciar uma thread para receber mensagens enquanto o usuário envia mensagens
-    receive_thread = threading.Thread(target=receive_messages, args=(stub, user_id))
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect((host, port))
+    
+    # Solicitar ao usuário que insira um apelido
+    nickname = input("Digite seu apelido: ")
+    client_socket.send(nickname.encode())
+
+    receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
     receive_thread.start()
 
     while True:
-        message = input("Enter message (or type 'exit' to quit): ")
-        if message.lower() == 'exit':
-            break
-        send_message(stub, user_id, message)
+        message = input()
+        client_socket.send(message.encode())
 
-    # Aguardar até que a thread de recebimento termine
-    receive_thread.join()
-
-    print("Exiting...")
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
