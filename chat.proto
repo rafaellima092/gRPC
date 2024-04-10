@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+service Chat {
+    rpc SendMessage(MessageRequest) returns (MessageResponse) {}
+    rpc ReceiveMessages(MessageRequest) returns (stream MessageResponse) {}
+}
+
+message MessageRequest {
+    string user_id = 1;
+    string message = 2;
+}
+
+message MessageResponse {
+    string user_id = 1;
+    string message = 2;
+}
